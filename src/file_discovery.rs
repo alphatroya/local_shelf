@@ -48,11 +48,12 @@ impl FileDiscovery {
     pub fn expand_path(path: &str) -> Result<PathBuf, FileDiscoveryError> {
         if let Some(path_without_tilde) = path.strip_prefix('~') {
             if let Some(home_dir) = dirs::home_dir() {
-                let path_without_tilde = if let Some(stripped) = path_without_tilde.strip_prefix('/') {
-                    stripped
-                } else {
-                    path_without_tilde
-                };
+                let path_without_tilde =
+                    if let Some(stripped) = path_without_tilde.strip_prefix('/') {
+                        stripped
+                    } else {
+                        path_without_tilde
+                    };
                 Ok(home_dir.join(path_without_tilde))
             } else {
                 Err(FileDiscoveryError::PathExpansionError(

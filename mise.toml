@@ -1,3 +1,4 @@
 [tools]
 npm = "latest"
 "npm:@fission-ai/openspec" = "latest"
+rust-analyzer = "latest"
