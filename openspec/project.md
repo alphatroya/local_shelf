@@ -9,7 +9,7 @@ The $KNOWLEDGE_BASE location parameter is stored in the project config folder (~
 Journals file name should be YYYY_MM_DD.md format. Create a new file if not exists, otherwise add entry at the end of the file.
 A new journal entry should suit this format:
 ```
-- **HH_mm** [[Name of the file]]
+- **HH:mm** [[Name of the file]]
 ```
 
 ## Configuration

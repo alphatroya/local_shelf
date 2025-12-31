@@ -23,7 +23,7 @@ pub enum JournalError {
 /// Represents a journal entry with timestamp and file link
 #[derive(Debug, Clone, PartialEq)]
 pub struct JournalEntry {
-    pub timestamp: String, // HH_mm format
+    pub timestamp: String, // HH:mm format
     pub filename: String,  // filename without extension
 }
 
@@ -48,9 +48,9 @@ impl JournalEntry {
                 ))
             })?;
 
-        // Generate timestamp in HH_mm format
+        // Generate timestamp in HH:mm format
         let now = Local::now();
-        let timestamp = now.format("%H_%M").to_string();
+        let timestamp = now.format("%H:%M").to_string();
 
         Ok(JournalEntry {
             timestamp,
@@ -60,7 +60,7 @@ impl JournalEntry {
 
     /// Format the journal entry as markdown
     ///
-    /// Returns the entry in the format: `- **HH_mm** [[Name of the file]]`
+    /// Returns the entry in the format: `- **HH:mm** [[Name of the file]]`
     pub fn format(&self) -> String {
         format!("- **{}** [[{}]]", self.timestamp, self.filename)
     }
@@ -254,19 +254,19 @@ mod tests {
         let entry = JournalEntry::new(&file_path).unwrap();
 
         assert_eq!(entry.filename, "test_article");
-        assert!(entry.timestamp.len() == 5); // HH_MM format
-        assert!(entry.timestamp.contains('_'));
+        assert!(entry.timestamp.len() == 5); // HH:MM format
+        assert!(entry.timestamp.contains(':'));
     }
 
     #[test]
     fn test_journal_entry_formatting() {
         let entry = JournalEntry {
-            timestamp: "14_30".to_string(),
+            timestamp: "14:30".to_string(),
             filename: "my_article".to_string(),
         };
 
         let formatted = entry.format();
-        assert_eq!(formatted, "- **14_30** [[my_article]]");
+        assert_eq!(formatted, "- **14:30** [[my_article]]");
     }
 
     #[test]
@@ -399,7 +399,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let test_file = temp_dir.path().join("test_journal.md");
 
-        let content = "- **14_30** [[test_file]]\n";
+        let content = "- **14:30** [[test_file]]\n";
         JournalManager::atomic_append(&test_file, content).unwrap();
 
         assert!(test_file.exists());
@@ -416,13 +416,13 @@ mod tests {
         fs::write(&test_file, "Initial content\n").unwrap();
 
         // Append new content
-        let new_content = "- **15_45** [[new_entry]]\n";
+        let new_content = "- **15:45** [[new_entry]]\n";
         JournalManager::atomic_append(&test_file, new_content).unwrap();
 
         let final_content = fs::read_to_string(&test_file).unwrap();
         assert_eq!(
             final_content,
-            "Initial content\n- **15_45** [[new_entry]]\n"
+            "Initial content\n- **15:45** [[new_entry]]\n"
         );
     }
 

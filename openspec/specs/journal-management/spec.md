@@ -26,8 +26,8 @@ The system SHALL append timestamped entries linking to moved files using the spe
 
 #### Scenario: Single file journal entry
 - **WHEN** creating a journal entry for a moved file
-- **THEN** the entry SHALL follow the format `- **HH_mm** [[Name of the file]]`
-- **AND** use the current time for the timestamp in HH_mm format
+- **THEN** the entry SHALL follow the format `- **HH:mm** [[Name of the file]]`
+- **AND** use the current time for the timestamp in HH:mm format
 - **AND** use the actual filename without extension for the link
 
 #### Scenario: Multiple file journal entries
