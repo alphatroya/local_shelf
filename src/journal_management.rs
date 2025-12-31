@@ -147,6 +147,7 @@ impl JournalManager {
     /// Append journal entries to the specified journal file
     ///
     /// Creates the file if it doesn't exist, or appends to existing file.
+    /// Entries in the same batch are written consecutively without blank lines.
     /// Uses atomic operations to prevent corruption.
     fn append_entries_to_journal(
         journal_path: &Path,
@@ -158,16 +159,20 @@ impl JournalManager {
         // Create the content to append
         let mut content = String::new();
 
-        // If file exists and has content, add a newline before new entries
+        // If file exists and has content, check if we need separation
         if journal_path.exists() && fs::metadata(journal_path)?.len() > 0 {
-            content.push('\n');
+            // Read the last byte to check if file ends with newline
+            let existing_content = fs::read_to_string(journal_path)?;
+            if !existing_content.ends_with('\n') {
+                content.push('\n');
+            }
         }
 
-        // Add all entry lines
-        for line in entry_lines {
-            content.push_str(&line);
-            content.push('\n');
-        }
+        // Join all entries with newlines (no blank lines between entries in same batch)
+        content.push_str(&entry_lines.join("\n"));
+
+        // Ensure content ends with a newline
+        content.push('\n');
 
         // Atomic append operation
         Self::atomic_append(journal_path, &content)?;
@@ -453,5 +458,65 @@ mod tests {
             assert!(line.starts_with("- **"));
             assert!(line.contains("]]"));
         }
+    }
+
+    #[test]
+    fn test_consecutive_app_runs_spacing() {
+        let temp_dir = tempdir().unwrap();
+        let config = create_test_config(&temp_dir.path().display().to_string());
+
+        // Simulate first app run
+        let first_files = vec![PathBuf::from("first_file.md")];
+        let journal_path = JournalManager::add_entries(&first_files, &config).unwrap();
+
+        // Simulate second app run (different batch)
+        let second_files = vec![PathBuf::from("second_file.md")];
+        JournalManager::add_entries(&second_files, &config).unwrap();
+
+        // Check the actual content
+        let content = fs::read_to_string(&journal_path).unwrap();
+        println!("Journal content:\n'{}'", content);
+
+        let lines: Vec<&str> = content.lines().collect();
+        println!("Number of lines: {}", lines.len());
+        for (i, line) in lines.iter().enumerate() {
+            println!("Line {}: '{}'", i, line);
+        }
+
+        // This should be 2 lines (2 entries), not 3 (with blank line)
+        assert_eq!(
+            lines.len(),
+            2,
+            "Expected 2 entries without blank line, got {} lines",
+            lines.len()
+        );
+    }
+
+    #[test]
+    fn test_append_to_file_without_ending_newline() {
+        let temp_dir = tempdir().unwrap();
+        let config = create_test_config(&temp_dir.path().display().to_string());
+
+        // Create journal file manually without ending newline
+        let journals_dir = temp_dir.path().join("journals");
+        fs::create_dir_all(&journals_dir).unwrap();
+
+        let today = Local::now().date_naive().format("%Y_%m_%d").to_string();
+        let journal_file = journals_dir.join(format!("{}.md", today));
+
+        // Write content WITHOUT trailing newline
+        fs::write(&journal_file, "- **15:00** [[existing_entry]]").unwrap();
+
+        // Add new entry
+        let new_files = vec![PathBuf::from("new_file.md")];
+        JournalManager::add_entries(&new_files, &config).unwrap();
+
+        let content = fs::read_to_string(&journal_file).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+
+        // Should have 2 lines (existing + new), properly separated
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("existing_entry"));
+        assert!(lines[1].contains("new_file"));
     }
 }

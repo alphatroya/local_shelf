@@ -24,23 +24,30 @@ The system SHALL create and manage daily journal files in {{Knowledge Base}}/jou
 ### Requirement: Journal Entry Creation
 The system SHALL append timestamped entries linking to moved files using the specified format.
 
-#### Scenario: Single file journal entry
-- **WHEN** creating a journal entry for a moved file
-- **THEN** the entry SHALL follow the format `- **HH:mm** [[Name of the file]]`
-- **AND** use the current time for the timestamp in HH:mm format
-- **AND** use the actual filename without extension for the link
-
 #### Scenario: Multiple file journal entries
 - **WHEN** creating journal entries for multiple moved files
 - **THEN** each file SHALL have a separate entry line
 - **AND** all entries SHALL use the same timestamp when processed together
 - **AND** entries SHALL be appended in the order files were processed
+- **AND** entries SHALL appear consecutively without blank lines between them
 
-#### Scenario: File link formatting
-- **WHEN** creating the file link portion of the journal entry
-- **THEN** the link SHALL use double bracket notation `[[filename]]`
-- **AND** use the filename without the .md extension
-- **AND** preserve the original filename case and special characters
+#### Scenario: Journal entry batch formatting
+- **WHEN** appending multiple entries in a single batch operation
+- **THEN** entries SHALL be written consecutively with no blank lines separating them
+- **AND** maintain proper separation from existing content in the journal file
+- **AND** the final entry SHALL end with a newline character
+- **EXAMPLES**: 
+  ```
+  - **16:36** [[First Article]]
+  - **16:36** [[Second Article]]  
+  - **16:36** [[Third Article]]
+  ```
+
+#### Scenario: Journal entry spacing consistency
+- **WHEN** entries are added to an existing journal file
+- **THEN** new entries SHALL be separated from existing content by a single newline
+- **AND** entries within the same batch SHALL have no blank lines between them
+- **AND** preserve all existing journal content without modification
 
 ### Requirement: Atomic Journal Operations
 The system SHALL ensure journal file operations are atomic to prevent data corruption.
