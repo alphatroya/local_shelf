@@ -37,7 +37,11 @@ cargo test test_config_validation_empty_path
 
 # Run tests in a specific file/module
 cargo test config::tests::
+cargo test file_discovery::tests::
 cargo test integration_test
+
+# List all available tests
+cargo test -- --list
 
 # Run with environment variable override
 KNOWLEDGE_BASE="/custom/path" cargo run
