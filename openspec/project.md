@@ -4,7 +4,7 @@
 The main purpose is to search all new .md article files in ~/Downloads/ folder and move them to {{Knowledge Base}}/pages folder.
 After them add a new link with timestamp to the end of today {{Knowledge Base}}/journals folder.
 
-The $KNOWLEDGE_BASE location parameter is stored in the project config folder (~/.config/local-shelf/config.yaml on Linux, ~/Library/Application Support/local-shelf/config.yaml on macOS).
+The $KNOWLEDGE_BASE location parameter is stored in the project config folder (~/.config/local_shelf/config.yaml on Linux, ~/Library/Application Support/local_shelf/config.yaml on macOS).
 
 Journals file name should be YYYY_MM_DD.md format. Create a new file if not exists, otherwise add entry at the end of the file.
 A new journal entry should suit this format:
@@ -15,7 +15,7 @@ A new journal entry should suit this format:
 ## Configuration
 The application uses a YAML-based configuration system with the following hierarchy (highest precedence first):
 1. Environment variables (KNOWLEDGE_BASE)
-2. User configuration file (~/.config/local-shelf/config.yaml)
+2. User configuration file (~/.config/local_shelf/config.yaml)
 3. Default values
 
 ### Configuration Options

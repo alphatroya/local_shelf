@@ -1,6 +1,6 @@
 # Agent Development Guide
 
-This guide provides coding standards and development practices for AI agents working on the local-shelf project.
+This guide provides coding standards and development practices for AI agents working on the local_shelf project.
 
 <!-- OPENSPEC:START -->
 ## OpenSpec Integration
@@ -138,9 +138,9 @@ impl From<serde_yaml::Error> for ConfigError {
 ```rust
 /// Get the configuration directory path
 /// 
-/// Returns the platform-specific config directory with "local-shelf" appended.
-/// On macOS: ~/Library/Application Support/local-shelf
-/// On Linux: ~/.config/local-shelf
+/// Returns the platform-specific config directory with "local_shelf" appended.
+/// On macOS: ~/Library/Application Support/local_shelf
+/// On Linux: ~/.config/local_shelf
 pub fn config_dir() -> Result<PathBuf, ConfigError> { ... }
 
 /// Expand tilde (~) in path

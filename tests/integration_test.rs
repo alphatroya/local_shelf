@@ -8,7 +8,7 @@ fn test_config_integration_scenarios() {
     // Test 1: Default configuration when no file exists
     {
         let _temp_dir = tempdir().unwrap();
-        let _config_dir = _temp_dir.path().join(".config/local-shelf");
+        let _config_dir = _temp_dir.path().join(".config/local_shelf");
 
         // Create a minimal Config to test defaults without filesystem
         let config = Config::default();
@@ -87,4 +87,25 @@ fn test_yaml_roundtrip() {
 
     // Should be identical
     assert_eq!(original_config, deserialized_config);
+}
+
+#[test]
+fn test_config_migration() {
+    // Test migration functionality in a controlled environment
+    // Note: This test works with the migration logic but doesn't test actual directory migration
+    // since we can't easily mock the dirs::config_dir() function
+    let temp_dir = tempdir().unwrap();
+
+    // Simulate legacy config content
+    let legacy_config_content = r#"
+knowledge_base_path: "/legacy/path"
+"#;
+
+    let legacy_config_path = temp_dir.path().join("legacy_config.yaml");
+    fs::write(&legacy_config_path, legacy_config_content).unwrap();
+
+    // Load and verify legacy config can be read
+    let content = fs::read_to_string(&legacy_config_path).unwrap();
+    let config: Config = serde_yaml::from_str(&content).unwrap();
+    assert_eq!(config.knowledge_base_path, "/legacy/path");
 }

@@ -52,12 +52,51 @@ impl Config {
     pub fn config_dir() -> Result<PathBuf, ConfigError> {
         dirs::config_dir()
             .map(|mut path| {
+                path.push("local_shelf");
+                path
+            })
+            .ok_or_else(|| {
+                ConfigError::ValidationError("Unable to determine config directory".to_string())
+            })
+    }
+
+    /// Get the legacy configuration directory path  
+    pub fn legacy_config_dir() -> Result<PathBuf, ConfigError> {
+        dirs::config_dir()
+            .map(|mut path| {
                 path.push("local-shelf");
                 path
             })
             .ok_or_else(|| {
                 ConfigError::ValidationError("Unable to determine config directory".to_string())
             })
+    }
+
+    /// Migrate configuration from legacy directory if needed
+    pub fn migrate_from_legacy() -> Result<bool, ConfigError> {
+        let legacy_dir = Self::legacy_config_dir()?;
+        let new_dir = Self::config_dir()?;
+
+        // Check if migration is needed
+        if legacy_dir.exists() && !new_dir.exists() {
+            // Create new directory
+            fs::create_dir_all(&new_dir)?;
+
+            // Copy config file if it exists
+            let legacy_config = legacy_dir.join("config.yaml");
+            let new_config = new_dir.join("config.yaml");
+
+            if legacy_config.exists() {
+                fs::copy(&legacy_config, &new_config)?;
+            }
+
+            // Remove legacy directory after successful migration
+            fs::remove_dir_all(&legacy_dir)?;
+
+            Ok(true) // Migration performed
+        } else {
+            Ok(false) // No migration needed
+        }
     }
 
     /// Get the configuration file path
@@ -89,6 +128,14 @@ impl Config {
 
     /// Create default configuration file if it doesn't exist
     pub fn initialize() -> Result<(), ConfigError> {
+        // Try to migrate from legacy config first
+        let migrated = Self::migrate_from_legacy()?;
+        if migrated {
+            println!(
+                "Configuration migrated from ~/.config/local-shelf/ to ~/.config/local_shelf/"
+            );
+        }
+
         let config_dir = Self::config_dir()?;
         let config_path = Self::config_file_path()?;
 

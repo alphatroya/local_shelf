@@ -1,8 +1,7 @@
-# configuration Specification
+# configuration Specification Delta
 
-## Purpose
-TBD - created by archiving change add-config-system. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Configuration File Management
 The system SHALL load configuration from YAML files with a hierarchical priority system.
 
@@ -18,17 +17,6 @@ The system SHALL load configuration from YAML files with a hierarchical priority
 - **WHEN** KNOWLEDGE_BASE environment variable is set
 - **THEN** environment value takes precedence over config file values
 
-### Requirement: Configuration Validation
-The system SHALL validate all configuration parameters before use.
-
-#### Scenario: Required path validation
-- **WHEN** knowledge_base_path is specified in config
-- **THEN** system SHALL verify the directory exists or can be created
-
-#### Scenario: Invalid configuration handling
-- **WHEN** configuration file contains invalid YAML or missing required fields
-- **THEN** system SHALL report clear error messages and exit gracefully
-
 ### Requirement: Configuration Initialization
 The system SHALL create default configuration on first run.
 
@@ -40,6 +28,8 @@ The system SHALL create default configuration on first run.
 - **WHEN** generating default configuration
 - **THEN** config file SHALL include commented examples and documentation
 
+## ADDED Requirements
+
 ### Requirement: Configuration Migration Support
 The system SHALL support migration from previous configuration locations.
 
@@ -50,4 +40,3 @@ The system SHALL support migration from previous configuration locations.
 #### Scenario: Automatic migration
 - **WHEN** user approves migration during startup
 - **THEN** system SHALL copy config.yaml and remove old directory after successful migration
-
