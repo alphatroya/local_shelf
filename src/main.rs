@@ -1,10 +1,12 @@
 pub mod config;
 pub mod file_discovery;
 pub mod file_operations;
+pub mod journal_management;
 
 use config::{Config, ConfigError};
 use file_discovery::{FileDiscovery, FileDiscoveryError};
 use file_operations::{FileOperationError, FileOperations};
+use journal_management::{JournalError, JournalManager};
 
 #[derive(Debug, thiserror::Error)]
 enum AppError {
@@ -14,6 +16,8 @@ enum AppError {
     FileDiscovery(#[from] FileDiscoveryError),
     #[error("File operation error: {0}")]
     FileOperation(#[from] FileOperationError),
+    #[error("Journal error: {0}")]
+    Journal(#[from] JournalError),
 }
 
 fn main() -> Result<(), AppError> {
@@ -65,11 +69,28 @@ fn main() -> Result<(), AppError> {
 
     if moved_files.is_empty() {
         println!("No files were successfully moved.");
-    } else {
-        println!(
-            "\nSuccessfully moved {} file(s) to pages directory.",
-            moved_files.len()
-        );
+        return Ok(());
+    }
+
+    println!(
+        "\nSuccessfully moved {} file(s) to pages directory.",
+        moved_files.len()
+    );
+
+    // Add journal entries for moved files
+    println!("Creating journal entries...");
+    match JournalManager::add_entries(&moved_files, &config) {
+        Ok(journal_path) => {
+            println!(
+                "✓ Added {} journal entr{} to {}",
+                moved_files.len(),
+                if moved_files.len() == 1 { "y" } else { "ies" },
+                journal_path.display()
+            );
+        }
+        Err(e) => {
+            eprintln!("✗ Failed to create journal entries: {}", e);
+        }
     }
 
     Ok(())
