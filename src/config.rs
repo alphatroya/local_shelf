@@ -128,6 +128,11 @@ impl Config {
 
     /// Create default configuration file if it doesn't exist
     pub fn initialize() -> Result<(), ConfigError> {
+        // Skip initialization during tests to avoid contaminating user config
+        if env::var("LOCAL_SHELF_SKIP_CONFIG_INIT").is_ok() {
+            return Ok(());
+        }
+
         // Try to migrate from legacy config first
         let migrated = Self::migrate_from_legacy()?;
         if migrated {
