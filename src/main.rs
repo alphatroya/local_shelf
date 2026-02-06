@@ -53,6 +53,26 @@ enum Commands {
         #[arg(help = "Path to directory containing markdown files")]
         path: Option<PathBuf>,
     },
+    /// Manage application configuration
+    #[command(name = "config")]
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Set configuration values
+    #[command(name = "set")]
+    Set {
+        /// Configuration key to set
+        #[arg(help = "Configuration key (currently only 'knowledge_base_path' is supported)")]
+        key: String,
+        /// Configuration value to set
+        #[arg(help = "Path to the knowledge base directory")]
+        value: String,
+    },
 }
 
 fn check_pandoc() -> Result<(), AppError> {
@@ -259,11 +279,41 @@ fn handle_stow_command(path: Option<PathBuf>) -> Result<(), AppError> {
     Ok(())
 }
 
+fn handle_config_command(command: ConfigCommands) -> Result<(), AppError> {
+    match command {
+        ConfigCommands::Set { key, value } => {
+            match key.as_str() {
+                "knowledge_base_path" => {
+                    // Initialize configuration on first run
+                    Config::initialize()?;
+
+                    // Load current configuration
+                    let mut config = Config::load()?;
+
+                    // Update the knowledge base path
+                    config.update_knowledge_base_path(&value)?;
+
+                    println!(
+                        "✓ Knowledge base path updated to: {}",
+                        config.get_knowledge_base_path()
+                    );
+                    Ok(())
+                }
+                _ => Err(AppError::Config(ConfigError::ValidationError(format!(
+                    "Unknown configuration key '{}'. Supported keys: knowledge_base_path",
+                    key
+                )))),
+            }
+        }
+    }
+}
+
 fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Stow { path } => handle_stow_command(path),
         Commands::Convert { path } => handle_convert_command(path),
+        Commands::Config { command } => handle_config_command(command),
     }
 }

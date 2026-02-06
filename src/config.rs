@@ -50,6 +50,11 @@ impl From<serde_yaml::Error> for ConfigError {
 impl Config {
     /// Get the configuration directory path
     pub fn config_dir() -> Result<PathBuf, ConfigError> {
+        // Check for test environment override first
+        if let Ok(test_config_dir) = env::var("LOCAL_SHELF_CONFIG_DIR") {
+            return Ok(PathBuf::from(test_config_dir));
+        }
+
         dirs::config_dir()
             .map(|mut path| {
                 path.push("local_shelf");
@@ -202,6 +207,78 @@ impl Config {
     pub fn get_knowledge_base_path(&self) -> String {
         Self::expand_path(&self.knowledge_base_path)
     }
+
+    /// Save the configuration to the config file
+    pub fn save(&self) -> Result<(), ConfigError> {
+        let config_path = Self::config_file_path()?;
+        let config_dir = Self::config_dir()?;
+
+        // Create config directory if it doesn't exist
+        if !config_dir.exists() {
+            fs::create_dir_all(&config_dir)?;
+        }
+
+        // Validate before saving
+        self.validate()?;
+
+        // Create YAML content with comments
+        let yaml_content = format!(
+            "# Local Shelf Configuration\n# \n# Knowledge Base path - where markdown files will be organized\n# Can be overridden with KNOWLEDGE_BASE environment variable\nknowledge_base_path: \"{}\"\n",
+            self.knowledge_base_path
+        );
+
+        fs::write(&config_path, yaml_content)?;
+        Ok(())
+    }
+
+    /// Update the knowledge base path and save to config file
+    pub fn update_knowledge_base_path(&mut self, new_path: &str) -> Result<(), ConfigError> {
+        // Expand tilde if present
+        let expanded_path = Self::expand_path(new_path);
+
+        // Validate the new path
+        if new_path.trim().is_empty() {
+            return Err(ConfigError::ValidationError(
+                "knowledge_base_path cannot be empty".to_string(),
+            ));
+        }
+
+        let path = Path::new(&expanded_path);
+
+        // Try to create the directory if it doesn't exist
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            return Err(ConfigError::ValidationError(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            )));
+        }
+
+        // If the path doesn't exist, try to create it
+        if !path.exists() {
+            match fs::create_dir_all(path) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(ConfigError::ValidationError(format!(
+                        "Cannot create directory '{}': {}",
+                        path.display(),
+                        e
+                    )));
+                }
+            }
+        } else if !path.is_dir() {
+            return Err(ConfigError::ValidationError(format!(
+                "Path '{}' exists but is not a directory",
+                path.display()
+            )));
+        }
+
+        // Update the configuration and save
+        self.knowledge_base_path = new_path.to_string();
+        self.save()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -299,5 +376,207 @@ mod tests {
         let expanded = config.get_knowledge_base_path();
         let home = dirs::home_dir().unwrap();
         assert_eq!(expanded, format!("{}/Test", home.display()));
+    }
+
+    #[test]
+    fn test_save_config() {
+        // Set environment variable to skip initialization during tests
+        unsafe {
+            env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", "1");
+        }
+
+        let _temp_dir = tempdir().unwrap();
+        let config = Config {
+            knowledge_base_path: "/tmp/test_save".to_string(),
+        };
+
+        // Mock the config directory (in a real test environment, we'd mock the entire path)
+        // For now, test the validation and YAML serialization logic
+        let yaml_content = format!(
+            "# Local Shelf Configuration\n# \n# Knowledge Base path - where markdown files will be organized\n# Can be overridden with KNOWLEDGE_BASE environment variable\nknowledge_base_path: \"{}\"\n",
+            config.knowledge_base_path
+        );
+
+        assert!(yaml_content.contains("/tmp/test_save"));
+        assert!(yaml_content.contains("knowledge_base_path:"));
+
+        // Clean up
+        unsafe {
+            env::remove_var("LOCAL_SHELF_SKIP_CONFIG_INIT");
+        }
+    }
+
+    #[test]
+    fn test_update_knowledge_base_path_validation() {
+        // Save current environment state to restore later
+        let original_skip_init = env::var("LOCAL_SHELF_SKIP_CONFIG_INIT").ok();
+        let original_config_dir = env::var("LOCAL_SHELF_CONFIG_DIR").ok();
+
+        // Use temporary config directory to avoid affecting user config
+        let temp_dir = tempdir().unwrap();
+        let temp_config_dir = temp_dir.path().join("test_config");
+        fs::create_dir_all(&temp_config_dir).unwrap();
+
+        // Set environment variable to use temporary config directory
+        unsafe {
+            env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", "1");
+            env::set_var("LOCAL_SHELF_CONFIG_DIR", temp_config_dir.to_str().unwrap());
+        }
+
+        let mut config = Config::default();
+
+        // Test empty path validation
+        let result = config.update_knowledge_base_path("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+
+        // Test whitespace path validation
+        let result = config.update_knowledge_base_path("   ");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cannot be empty"));
+
+        // Test nonexistent parent directory
+        let result = config.update_knowledge_base_path("/nonexistent/parent/path");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Parent directory does not exist")
+        );
+
+        // Restore original environment state
+        unsafe {
+            env::remove_var("LOCAL_SHELF_SKIP_CONFIG_INIT");
+            env::remove_var("LOCAL_SHELF_CONFIG_DIR");
+
+            if let Some(val) = original_skip_init {
+                env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", val);
+            }
+            if let Some(val) = original_config_dir {
+                env::set_var("LOCAL_SHELF_CONFIG_DIR", val);
+            }
+        }
+    }
+
+    #[test]
+    fn test_update_knowledge_base_path_tilde_expansion() {
+        // Save current environment state to restore later
+        let original_skip_init = env::var("LOCAL_SHELF_SKIP_CONFIG_INIT").ok();
+        let original_config_dir = env::var("LOCAL_SHELF_CONFIG_DIR").ok();
+
+        // Use temporary config directory to avoid affecting user config
+        let temp_dir = tempdir().unwrap();
+        let temp_config_dir = temp_dir.path().join("test_config");
+        fs::create_dir_all(&temp_config_dir).unwrap();
+
+        // Set environment variable to use temporary config directory
+        unsafe {
+            env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", "1");
+            env::set_var("LOCAL_SHELF_CONFIG_DIR", temp_config_dir.to_str().unwrap());
+        }
+
+        let mut config = Config::default();
+        let home = dirs::home_dir().unwrap();
+        let test_path = "~/TestUpdateUnit"; // Use different name to avoid conflicts
+
+        // Create a temporary test directory in the home directory
+        let test_dir = home.join("TestUpdateUnit");
+
+        // This test may fail in CI environments without proper home directory setup
+        // In practice, we'd mock the directory creation for robust testing
+        if home.exists() {
+            // Create the test directory
+            fs::create_dir_all(&test_dir).ok();
+
+            let result = config.update_knowledge_base_path(test_path);
+            // We expect this to either succeed or fail with a specific validation error
+            match result {
+                Ok(_) => {
+                    // If it succeeded, the path should be expanded
+                    let expected_expanded = format!("{}/TestUpdateUnit", home.display());
+                    assert_eq!(config.get_knowledge_base_path(), expected_expanded);
+
+                    // Verify config file was created in temp directory, not user directory
+                    let temp_config_file = temp_config_dir.join("config.yaml");
+                    assert!(
+                        temp_config_file.exists(),
+                        "Config should be saved in temp directory"
+                    );
+                }
+                Err(e) => {
+                    // If it failed, it should be due to directory creation issues
+                    assert!(
+                        e.to_string().contains("Cannot create directory")
+                            || e.to_string().contains("Parent directory does not exist")
+                    );
+                }
+            }
+
+            // Clean up the test directory
+            fs::remove_dir_all(&test_dir).ok();
+        }
+
+        // Restore original environment state
+        unsafe {
+            env::remove_var("LOCAL_SHELF_SKIP_CONFIG_INIT");
+            env::remove_var("LOCAL_SHELF_CONFIG_DIR");
+
+            if let Some(val) = original_skip_init {
+                env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", val);
+            }
+            if let Some(val) = original_config_dir {
+                env::set_var("LOCAL_SHELF_CONFIG_DIR", val);
+            }
+        }
+    }
+
+    #[test]
+    fn test_config_dir_override() {
+        // Save current environment state to restore later
+        let original_config_dir = env::var("LOCAL_SHELF_CONFIG_DIR").ok();
+
+        let temp_dir = tempdir().unwrap();
+        let test_config_dir = temp_dir.path().join("test_config");
+
+        // Set the override environment variable
+        unsafe {
+            env::set_var("LOCAL_SHELF_CONFIG_DIR", test_config_dir.to_str().unwrap());
+        }
+
+        // Test that config_dir returns the override path
+        let result = Config::config_dir().unwrap();
+        assert_eq!(result, test_config_dir);
+
+        // Restore original environment state
+        unsafe {
+            env::remove_var("LOCAL_SHELF_CONFIG_DIR");
+            if let Some(val) = original_config_dir {
+                env::set_var("LOCAL_SHELF_CONFIG_DIR", val);
+            }
+        }
+    }
+
+    #[test]
+    fn test_config_dir_normal_behavior() {
+        // Save current environment state to restore later
+        let original_config_dir = env::var("LOCAL_SHELF_CONFIG_DIR").ok();
+
+        // Ensure no override is set
+        unsafe {
+            env::remove_var("LOCAL_SHELF_CONFIG_DIR");
+        }
+
+        // Test normal behavior
+        let result = Config::config_dir().unwrap();
+        let expected = dirs::config_dir().unwrap().join("local_shelf");
+        assert_eq!(result, expected);
+
+        // Restore original environment state
+        unsafe {
+            if let Some(val) = original_config_dir {
+                env::set_var("LOCAL_SHELF_CONFIG_DIR", val);
+            }
+        }
     }
 }

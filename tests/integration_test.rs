@@ -1,16 +1,28 @@
 use local_shelf::config::Config;
 use std::env;
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
 
 /// Helper function to run cargo with test environment isolation
 fn run_cargo_with_test_env(args: &[&str]) -> std::process::Output {
-    Command::new("cargo")
-        .args(args)
-        .env("LOCAL_SHELF_SKIP_CONFIG_INIT", "1")
-        .output()
-        .expect("Failed to execute command")
+    run_cargo_with_test_config(args, None)
+}
+
+/// Helper function to run cargo with test environment isolation and optional config directory
+fn run_cargo_with_test_config(
+    args: &[&str],
+    temp_config_dir: Option<&str>,
+) -> std::process::Output {
+    let mut cmd = Command::new("cargo");
+    cmd.args(args).env("LOCAL_SHELF_SKIP_CONFIG_INIT", "1");
+
+    if let Some(config_dir) = temp_config_dir {
+        cmd.env("LOCAL_SHELF_CONFIG_DIR", config_dir);
+    }
+
+    cmd.output().expect("Failed to execute command")
 }
 
 #[test]
@@ -317,4 +329,187 @@ fn test_unified_directory_parameters() {
     // Both should mention directory containing markdown files
     assert!(stow_help.contains("directory containing markdown files"));
     assert!(convert_help.contains("directory containing markdown files"));
+}
+
+#[test]
+fn test_cli_config_help_output() {
+    let output = run_cargo_with_test_env(&["run", "--", "config", "--help"]);
+
+    assert!(output.status.success(), "Command should succeed");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Manage application configuration"));
+    assert!(stdout.contains("set"));
+    assert!(stdout.contains("Set configuration values"));
+}
+
+#[test]
+fn test_cli_config_set_help_output() {
+    let output = run_cargo_with_test_env(&["run", "--", "config", "set", "--help"]);
+
+    assert!(output.status.success(), "Command should succeed");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Set configuration values"));
+    assert!(stdout.contains("<KEY>"));
+    assert!(stdout.contains("<VALUE>"));
+    assert!(stdout.contains("Configuration key"));
+    assert!(stdout.contains("knowledge_base_path"));
+}
+
+#[test]
+fn test_config_set_invalid_key() {
+    let temp_dir = tempdir().unwrap();
+    let temp_config_dir = temp_dir.path().to_str().unwrap();
+
+    let output = run_cargo_with_test_config(
+        &["run", "--", "config", "set", "invalid_key", "/some/path"],
+        Some(temp_config_dir),
+    );
+
+    assert!(
+        !output.status.success(),
+        "Command should fail with invalid key"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Unknown configuration key 'invalid_key'"));
+    assert!(stderr.contains("knowledge_base_path"));
+}
+
+#[test]
+fn test_config_set_empty_path() {
+    let temp_dir = tempdir().unwrap();
+    let temp_config_dir = temp_dir.path().to_str().unwrap();
+
+    let output = run_cargo_with_test_config(
+        &["run", "--", "config", "set", "knowledge_base_path", ""],
+        Some(temp_config_dir),
+    );
+
+    assert!(
+        !output.status.success(),
+        "Command should fail with empty path"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("knowledge_base_path cannot be empty"));
+}
+
+#[test]
+fn test_config_set_invalid_path() {
+    let temp_dir = tempdir().unwrap();
+    let temp_config_dir = temp_dir.path().to_str().unwrap();
+
+    let output = run_cargo_with_test_config(
+        &[
+            "run",
+            "--",
+            "config",
+            "set",
+            "knowledge_base_path",
+            "/nonexistent/readonly/path",
+        ],
+        Some(temp_config_dir),
+    );
+
+    assert!(
+        !output.status.success(),
+        "Command should fail with invalid path"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Parent directory does not exist"));
+}
+
+#[test]
+fn test_config_set_valid_path_with_temp_config() {
+    let temp_dir = tempdir().unwrap();
+    let temp_config_dir = temp_dir.path().to_str().unwrap();
+    let test_kb_dir = temp_dir.path().join("test_knowledge_base");
+
+    // Create the test knowledge base directory
+    fs::create_dir_all(&test_kb_dir).unwrap();
+
+    let output = run_cargo_with_test_config(
+        &[
+            "run",
+            "--",
+            "config",
+            "set",
+            "knowledge_base_path",
+            test_kb_dir.to_str().unwrap(),
+        ],
+        Some(temp_config_dir),
+    );
+
+    assert!(
+        output.status.success(),
+        "Command should succeed with valid path"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Knowledge base path updated to:"));
+    assert!(stdout.contains(test_kb_dir.to_str().unwrap()));
+
+    // Verify the config file was created in the temp directory
+    let config_file = PathBuf::from(temp_config_dir).join("config.yaml");
+    assert!(
+        config_file.exists(),
+        "Config file should be created in temp directory"
+    );
+
+    let config_content = fs::read_to_string(&config_file).unwrap();
+    assert!(config_content.contains("knowledge_base_path:"));
+    assert!(config_content.contains(test_kb_dir.to_str().unwrap()));
+
+    // Verify user's real config is not affected
+    let user_config_dir = dirs::config_dir().unwrap().join("local_shelf");
+    if user_config_dir.exists() {
+        let user_config_file = user_config_dir.join("config.yaml");
+        if user_config_file.exists() {
+            let user_config_content = fs::read_to_string(&user_config_file).unwrap();
+            // The user's config should not contain our test path
+            assert!(!user_config_content.contains(test_kb_dir.to_str().unwrap()));
+        }
+    }
+}
+
+#[test]
+fn test_config_set_tilde_expansion() {
+    let temp_dir = tempdir().unwrap();
+    let temp_config_dir = temp_dir.path().to_str().unwrap();
+    let home_dir = dirs::home_dir().unwrap();
+    let test_relative_path = "TestConfigTilde";
+    let test_kb_dir = home_dir.join(test_relative_path);
+
+    // Create the test directory in home
+    fs::create_dir_all(&test_kb_dir).unwrap();
+
+    // Test with tilde path
+    let tilde_path = format!("~/{}", test_relative_path);
+    let output = run_cargo_with_test_config(
+        &[
+            "run",
+            "--",
+            "config",
+            "set",
+            "knowledge_base_path",
+            &tilde_path,
+        ],
+        Some(temp_config_dir),
+    );
+
+    assert!(
+        output.status.success(),
+        "Command should succeed with tilde path"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Knowledge base path updated to:"));
+    // Should show the expanded path, not the tilde path
+    assert!(stdout.contains(test_kb_dir.to_str().unwrap()));
+
+    // Clean up
+    fs::remove_dir_all(&test_kb_dir).ok();
 }
