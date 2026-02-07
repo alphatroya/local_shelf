@@ -28,7 +28,7 @@ enum AppError {
 #[derive(Parser)]
 #[command(
     name = "local_shelf",
-    version = "0.2.0",
+    version = env!("CARGO_PKG_VERSION"),
     about = "A tool for organizing and converting markdown files",
     author = "Local Shelf Contributors"
 )]

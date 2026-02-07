@@ -12,7 +12,7 @@ The system SHALL provide a command-line interface with subcommands for different
 
 #### Scenario: Display version information
 - **WHEN** user runs `local_shelf --version` or `local_shelf -V`
-- **THEN** display the application version number "0.2.0"
+- **THEN** display the application version number "0.3.0"
 
 #### Scenario: Invalid subcommand handling
 - **WHEN** user runs `local_shelf invalid-command`

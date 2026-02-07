@@ -140,7 +140,7 @@ fn test_cli_version_output() {
     let output = run_cargo_with_test_env(&["run", "--", "--version"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("local_shelf 0.2.0"));
+    assert!(stdout.contains("local_shelf 0.3.0"));
 }
 
 #[test]
