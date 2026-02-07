@@ -53,6 +53,9 @@ enum Commands {
         #[arg(help = "Path to directory containing markdown files")]
         path: Option<PathBuf>,
     },
+    /// Display configuration information and example configuration
+    #[command(name = "config")]
+    Config,
 }
 
 fn check_pandoc() -> Result<(), AppError> {
@@ -259,11 +262,123 @@ fn handle_stow_command(path: Option<PathBuf>) -> Result<(), AppError> {
     Ok(())
 }
 
+fn handle_config_command() -> Result<(), AppError> {
+    println!("Local Shelf Configuration");
+    println!("=========================");
+    println!();
+
+    // Display configuration directory path
+    match Config::config_dir() {
+        Ok(config_dir) => {
+            println!("Configuration directory: {}", config_dir.display());
+
+            let config_file = Config::config_file_path()?;
+            println!("Configuration file: {}", config_file.display());
+
+            if config_file.exists() {
+                println!("Status: Configuration file exists");
+            } else {
+                println!(
+                    "Status: Configuration file does not exist (will be created on first run)"
+                );
+            }
+        }
+        Err(e) => {
+            println!("Error determining config directory: {}", e);
+        }
+    }
+
+    println!();
+    println!("Example configuration file (config.yaml):");
+    println!("=========================================");
+    println!();
+    println!("# Local Shelf Configuration");
+    println!("# ");
+    println!("# Knowledge Base path - where markdown files will be organized");
+    println!("# Can be overridden with KNOWLEDGE_BASE environment variable");
+    println!("knowledge_base_path: \"~/Knowledge Base\"");
+    println!();
+    println!("Environment Variables:");
+    println!("=====================");
+    println!("KNOWLEDGE_BASE - Override the knowledge_base_path setting");
+    println!();
+
+    // Display current effective configuration if possible
+    match Config::load() {
+        Ok(config) => {
+            println!("Current Configuration:");
+            println!("=====================");
+            println!("Knowledge Base path: {}", config.get_knowledge_base_path());
+        }
+        Err(e) => {
+            println!("Note: Could not load current configuration: {}", e);
+        }
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Stow { path } => handle_stow_command(path),
         Commands::Convert { path } => handle_convert_command(path),
+        Commands::Config => handle_config_command(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_handle_config_command() {
+        // Test that config command doesn't panic and returns Ok
+        let result = handle_config_command();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_config_command_with_no_config_file() {
+        // Set environment variable to skip config initialization
+        unsafe {
+            env::set_var("LOCAL_SHELF_SKIP_CONFIG_INIT", "1");
+        }
+
+        // This should still work even without a config file
+        let result = handle_config_command();
+        assert!(result.is_ok());
+
+        // Clean up
+        unsafe {
+            env::remove_var("LOCAL_SHELF_SKIP_CONFIG_INIT");
+        }
+    }
+
+    #[test]
+    fn test_config_command_with_environment_override() {
+        unsafe {
+            env::set_var("KNOWLEDGE_BASE", "/tmp/test_kb");
+        }
+
+        let result = handle_config_command();
+        assert!(result.is_ok());
+
+        unsafe {
+            env::remove_var("KNOWLEDGE_BASE");
+        }
+    }
+
+    #[test]
+    fn test_commands_enum_includes_config() {
+        // This test ensures Config variant exists in Commands enum
+        // If it compiles, the enum includes Config
+        let config_command = Commands::Config;
+        match config_command {
+            Commands::Config => {} // Successfully matched Config variant
+            _ => panic!("Config variant should match"),
+        }
     }
 }
