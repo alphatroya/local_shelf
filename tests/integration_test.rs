@@ -262,6 +262,7 @@ fn test_stow_with_directory_parameter() {
 
     // Run stow with directory parameter (will try to move to Knowledge Base)
     let output = Command::new("cargo")
+        .env("KNOWLEDGE_BASE", tempdir().unwrap().path())
         .args(["run", "--", "stow", temp_dir.path().to_str().unwrap()])
         .output()
         .expect("Failed to execute command");
